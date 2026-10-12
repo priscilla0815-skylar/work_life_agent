@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>工作生活 Agent</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #10120f;
+        color: #eef1e8;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .app {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        max-width: 920px;
+        height: 100vh;
+        margin: 0 auto;
+        padding: 16px;
+        gap: 12px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid #30362c;
+        background: #191c16;
+        padding: 14px 16px;
+      }
+      h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .status { color: #9da694; font-size: 13px; }
+      .chat {
+        overflow: auto;
+        border: 1px solid #30362c;
+        background: #151812;
+        padding: 16px;
+      }
+      .msg {
+        max-width: 78%;
+        margin: 0 0 12px;
+        padding: 11px 13px;
+        border: 1px solid #30362c;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+      .user {
+        margin-left: auto;
+        background: #203123;
+        border-color: #386746;
+      }
+      .agent { background: #1c2018; }
+      .error {
+        background: #2b1715;
+        border-color: #8f4539;
+      }
+      form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        border: 1px solid #30362c;
+        background: #191c16;
+        padding: 12px;
+      }
+      textarea {
+        min-height: 54px;
+        max-height: 160px;
+        resize: vertical;
+        border: 1px solid #30362c;
+        background: #0f110d;
+        color: #eef1e8;
+        padding: 10px;
+        font: inherit;
+        line-height: 1.5;
+        outline: none;
+      }
+      textarea:focus { border-color: #56d59d; }
+      button {
+        min-width: 92px;
+        border: 1px solid #56d59d;
+        background: #56d59d;
+        color: #07110b;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+      }
+      .secondary {
+        min-width: 112px;
+        background: transparent;
+        color: #eef1e8;
+      }
+      @media (max-width: 640px) {
+        .app { padding: 8px; }
+        header { align-items: flex-start; flex-direction: column; }
+        .actions { width: 100%; flex-wrap: wrap; }
+        form { grid-template-columns: 1fr; }
+        .msg { max-width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <h1>工作生活 Agent</h1>
+        <div class="actions">
+          <button class="secondary" id="streamBtn" type="button">打开云手机</button>
+          <button class="secondary" id="logoutBtn" type="button">退出登录</button>
+          <span class="status" id="status">就绪</span>
+        </div>
+      </header>
+
+      <section class="chat" id="chat">
+        <div class="msg agent">你好，可以直接和我说待办、吃饭打卡、睡眠记录，或者让我操作云手机。</div>
+      </section>
+
+      <form id="form">
+        <textarea id="input" placeholder="输入消息，Enter 发送，Shift + Enter 换行"></textarea>
+        <button id="send" type="submit">发送</button>
+      </form>
+    </main>
+
+    <script src="config.js"></script>
+    <script>
+      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
+      const params = new URLSearchParams(location.search);
+      const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
+      const AUTH_STORAGE_KEY = "work_life_agent_auth";
+      const authState = resolveAuthState();
+      if (!authState || !authState.token) {
+        redirectToLogin();
+        throw new Error("authentication required");
+      }
+      let USER_ID = authState.userId;
+      let SESSION_ID = `web-simple-session-${USER_ID}`;
+
+      const chat = document.getElementById("chat");
+      const form = document.getElementById("form");
+      const input = document.getElementById("input");
+      const send = document.getElementById("send");
+      const statusEl = document.getElementById("status");
+      const streamBtn = document.getElementById("streamBtn");
+      const logoutBtn = document.getElementById("logoutBtn");
+
+      statusEl.textContent = `用户 ${USER_ID}`;
+      streamBtn.addEventListener("click", openCloudPhone);
+      logoutBtn.addEventListener("click", logout);
+      input.focus();
+      hydrateServerSession();
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        append("user", text);
+        const reply = append("agent", "思考中...");
+        await invokeAgent(text, reply);
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
+      async function invokeAgent(prompt, replyEl) {
+        send.disabled = true;
+        statusEl.textContent = "请求中";
+        let answer = "";
+        window.__lastAgentStatus = "pending";
+
+        try {
+          const response = await fetch(`${ENDPOINT}/invoke`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "text/event-stream",
+              "Authorization": `Bearer ${authState.accessToken || authState.token}`,
+              "session_id": SESSION_ID
+            },
+            body: JSON.stringify({ prompt })
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split(/\r?\n\r?\n/);
+            buffer = frames.pop() || "";
+
+            for (const frame of frames) {
+              const dataText = frame
+                .split(/\r?\n/)
+                .filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim())
+                .join("");
+              if (!dataText || dataText === "[DONE]") continue;
+              const data = JSON.parse(dataText);
+              if (data.error) throw new Error(data.error);
+              const piece = extractText(data);
+              if (!piece) continue;
+              answer = data.partial === false ? piece : answer + piece;
+              replyEl.textContent = answer;
+              chat.scrollTop = chat.scrollHeight;
+            }
+          }
+
+          replyEl.textContent = answer || "没有返回内容。";
+          statusEl.textContent = "完成";
+          window.__lastAgentStatus = "done";
+          window.__lastAgentAnswer = replyEl.textContent;
+        } catch (error) {
+          replyEl.classList.add("error");
+          replyEl.textContent = String(error.message || error);
+          statusEl.textContent = "失败";
+          window.__lastAgentStatus = "error";
+          window.__lastAgentAnswer = replyEl.textContent;
+        } finally {
+          send.disabled = false;
+          input.focus();
+        }
+      }
+
+      async function hydrateServerSession() {
+        try {
+          const response = await fetch(`${ENDPOINT}/api/me`, {
+            credentials: "include",
+            headers: {
+              "Authorization": `Bearer ${authState.accessToken || authState.token}`
+            }
+          });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!data.user_id) return;
+          USER_ID = data.user_id;
+          SESSION_ID = `web-simple-session-${USER_ID}`;
+          statusEl.textContent = `用户 ${USER_ID}`;
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+            ...readStoredAuth(),
+            userId: USER_ID,
+            loginAt: Date.now()
+          }));
+        } catch (_) {}
+      }
+
+      function extractText(data) {
+        const parts = data && data.content && data.content.parts;
+        if (!Array.isArray(parts)) return "";
+        return parts
+          .filter((part) => part && part.text && !part.thought)
+          .map((part) => part.text)
+          .join("");
+      }
+
+      function append(role, text) {
+        const el = document.createElement("div");
+        el.className = `msg ${role}`;
+        el.textContent = text;
+        chat.appendChild(el);
+        chat.scrollTop = chat.scrollHeight;
+        return el;
+      }
+
+      async function openCloudPhone() {
+        const next = new URL("stream.html", location.href);
+        next.searchParams.set("endpoint", ENDPOINT);
+        next.searchParams.set("user_id", USER_ID);
+        const opened = window.open(next.toString(), "cloud_phone_stream");
+        if (opened) {
+          opened.focus();
+        } else {
+          location.href = next.toString();
+        }
+      }
+
+      function resolveAuthState() {
+        const callbackUserId = pickParam(["user_id", "userId", "sub", "uid", "open_id", "openId", "email", "account_id", "accountId"]);
+        const callbackToken = pickParam(["access_token", "accessToken", "id_token", "idToken", "token", "code", "auth_code", "authCode", "ticket"]);
+        const stored = readStoredAuth();
+
+        if (callbackUserId || callbackToken) {
+          const userId = callbackUserId || (callbackToken ? `cloud_user_${String(callbackToken).slice(0, 12)}` : "web_user");
+          const nextState = {
+            userId,
+            token: callbackToken || stored.token || "",
+            loginAt: Date.now()
+          };
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextState));
+          return nextState;
+        }
+
+        if (stored && stored.userId && stored.token) {
+          if (stored.expiresAt && stored.expiresAt <= Date.now()) {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            return null;
+          }
+          return stored;
+        }
+        return null;
+      }
+
+      function pickParam(keys) {
+        for (const key of keys) {
+          const value = params.get(key) || hashParams.get(key);
+          if (value) return value;
+        }
+        return "";
+      }
+
+      function readStoredAuth() {
+        try {
+          return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || "null") || {};
+        } catch (_) {
+          return {};
+        }
+      }
+
+      function logout() {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        redirectToLogin();
+      }
+
+      function redirectToLogin() {
+        const next = new URL("./", location.href);
+        next.searchParams.set("endpoint", ENDPOINT);
+        for (const key of ["issuer", "client_id", "signup_url"]) {
+          if (params.get(key)) next.searchParams.set(key, params.get(key));
+        }
+        location.replace(next.toString());
+      }
+    </script>
+  </body>
+</html>

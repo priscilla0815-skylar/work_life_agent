@@ -1,0 +1,4 @@
+veadk-python==1.0.9
+agentkit-sdk-python==0.8.1
+volcengine-python-sdk==5.0.43
+PyJWT[crypto]>=2.8,<3

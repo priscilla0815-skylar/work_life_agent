@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>工作生活 Agent 登录</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #10120f;
+        color: #eef1e8;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .auth {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .auth-panel {
+        width: min(440px, 100%);
+        border: 1px solid #30362c;
+        background: #191c16;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 22px;
+        letter-spacing: 0;
+      }
+      p {
+        margin: 0 0 20px;
+        color: #aeb8a4;
+        line-height: 1.7;
+      }
+      .auth-actions {
+        display: grid;
+        gap: 10px;
+      }
+      .auth-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        border: 1px solid #56d59d;
+        background: #56d59d;
+        color: #07110b;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .auth-link.secondary {
+        background: transparent;
+        color: #eef1e8;
+        border-color: #56604f;
+      }
+      @media (max-width: 640px) {
+        .auth-panel { padding: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="auth">
+      <section class="auth-panel">
+        <h1>工作生活 Agent</h1>
+        <p>登录和 Agent 对话页已拆分。云端用户池回调成功后会进入独立的 Agent 页面。</p>
+        <div class="auth-actions">
+          <a class="auth-link" id="loginLink" href="#">使用火山 Identity 登录</a>
+          <a class="auth-link secondary" id="signupLink" href="#">注册</a>
+          <a class="auth-link secondary" id="agentLink" href="#">直接进入 Agent</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script>
+      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
+      const params = new URLSearchParams(location.search);
+      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
+      const IDENTITY_REGION = params.get("identity_region") || APP_CONFIG.identityRegion || "cn-beijing";
+      const IDENTITY_ISSUER = resolveIssuer(
+        params.get("issuer") || params.get("user_pool_id") || APP_CONFIG.userPoolId || "",
+        IDENTITY_REGION
+      );
+      const CLIENT_ID = params.get("client_id") || APP_CONFIG.clientId || "";
+      const SIGNUP_URL = params.get("signup_url") || "";
+      const REDIRECT_URI = new URL("auth.html", location.href).toString();
+
+      document.getElementById("loginLink").addEventListener("click", (event) => {
+        startAuthorization(event, false);
+      });
+      document.getElementById("signupLink").addEventListener("click", (event) => {
+        if (SIGNUP_URL) {
+          event.preventDefault();
+          location.href = SIGNUP_URL;
+          return;
+        }
+        startAuthorization(event, true);
+      });
+      document.getElementById("agentLink").href = agentUrl();
+
+      function resolveIssuer(value, region) {
+        const normalized = value.trim().replace(/\/+$/, "");
+        if (!normalized || /^https?:\/\//i.test(normalized)) return normalized;
+        const userPoolId = normalized.startsWith("userpool-")
+          ? normalized
+          : `userpool-${normalized}`;
+        return `https://${userPoolId}.userpool.auth.id.${region}.volces.com`;
+      }
+
+      async function startAuthorization(event, signup) {
+        event.preventDefault();
+        if (!IDENTITY_ISSUER || !CLIENT_ID) {
+          throw new Error("URL must include user_pool_id and client_id");
+        }
+        const state = randomString(32);
+        const verifier = randomString(64);
+        const discovery = await fetch(`${IDENTITY_ISSUER}/.well-known/openid-configuration`).then((response) => {
+          if (!response.ok) throw new Error("无法读取 Identity 配置");
+          return response.json();
+        });
+        sessionStorage.setItem("identity_oauth_state", state);
+        sessionStorage.setItem("identity_oauth_verifier", verifier);
+        sessionStorage.setItem("identity_oauth_config", JSON.stringify({
+          endpoint: ENDPOINT,
+          issuer: IDENTITY_ISSUER,
+          client_id: CLIENT_ID,
+          signup_url: SIGNUP_URL,
+          token_endpoint: discovery.token_endpoint,
+          userinfo_endpoint: discovery.userinfo_endpoint,
+          redirect_uri: REDIRECT_URI
+        }));
+        const url = new URL(discovery.authorization_endpoint);
+        url.search = new URLSearchParams({
+          response_type: "code",
+          client_id: CLIENT_ID,
+          scope: "openid profile",
+          redirect_uri: REDIRECT_URI,
+          state,
+          code_challenge: await sha256Base64Url(verifier),
+          code_challenge_method: "S256"
+        }).toString();
+        if (signup) {
+          const bridge = new URL("oauth/signup", location.href);
+          bridge.searchParams.set("authorization_url", url.toString());
+          location.href = bridge.toString();
+        } else {
+          location.href = url.toString();
+        }
+      }
+
+      function agentUrl() {
+        const next = new URL("agent.html", location.href);
+        next.searchParams.set("endpoint", ENDPOINT);
+        if (IDENTITY_ISSUER) next.searchParams.set("issuer", IDENTITY_ISSUER);
+        next.searchParams.set("identity_region", IDENTITY_REGION);
+        if (CLIENT_ID) next.searchParams.set("client_id", CLIENT_ID);
+        if (SIGNUP_URL) next.searchParams.set("signup_url", SIGNUP_URL);
+        next.hash = "";
+        return next.toString();
+      }
+
+      function randomString(length) {
+        const bytes = new Uint8Array(length);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function sha256Base64Url(value) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+        const bytes = new Uint8Array(digest);
+        let binary = "";
+        bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+        return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      }
+
+    </script>
+  </body>
+</html>

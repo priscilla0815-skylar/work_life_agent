@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录处理中</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #10120f;
+        color: #eef1e8;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .panel {
+        width: min(420px, calc(100vw - 32px));
+        border: 1px solid #30362c;
+        background: #191c16;
+        padding: 22px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+      p {
+        margin: 0;
+        color: #aeb8a4;
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h1>正在进入 Agent</h1>
+      <p>登录状态已返回，正在跳转到主页面。</p>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
+      const params = new URLSearchParams(location.search);
+      const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+      const AUTH_STORAGE_KEY = "work_life_agent_auth";
+
+      handleCallback().catch((error) => {
+        document.querySelector("h1").textContent = "登录失败";
+        document.querySelector("p").textContent = error.message || String(error);
+      });
+
+      async function handleCallback() {
+        const error = pickParam(["error"]);
+        if (error) throw new Error(pickParam(["error_description"]) || error);
+
+        const config = readOAuthConfig();
+        const code = pickParam(["code"]);
+        const state = pickParam(["state"]);
+        if (!code) {
+          const legacyToken = pickParam(["access_token", "accessToken", "id_token", "idToken", "token", "ticket"]);
+          if (!legacyToken) throw new Error("回调中没有授权码 code。请确认用户池客户端回调地址配置为当前 auth.html。");
+          return finishLogin(config, legacyToken, pickParam(["user_id", "sub", "uid", "open_id", "email"]));
+        }
+
+        const expectedState = sessionStorage.getItem("identity_oauth_state");
+        const verifier = sessionStorage.getItem("identity_oauth_verifier");
+        if (!expectedState || !verifier || !state || state !== expectedState) {
+          throw new Error("OAuth state 校验失败，请重新登录。");
+        }
+
+        const response = await fetch(config.token_endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            client_id: config.client_id,
+            code,
+            redirect_uri: config.redirect_uri,
+            code_verifier: verifier
+          })
+        });
+        const tokenSet = await parseResponse(response);
+        if (!response.ok || !tokenSet.access_token) {
+          throw new Error(tokenSet.error_description || tokenSet.error || "授权码换取令牌失败");
+        }
+
+        let claims = decodeJwt(tokenSet.id_token);
+        if (config.userinfo_endpoint && tokenSet.access_token) {
+          try {
+            const userResponse = await fetch(config.userinfo_endpoint, {
+              headers: { Authorization: `Bearer ${tokenSet.access_token}` }
+            });
+            if (userResponse.ok) claims = { ...claims, ...(await userResponse.json()) };
+          } catch (_) {}
+        }
+        await finishLogin(config, tokenSet, claims.sub || claims.user_id || claims.email || claims.username);
+      }
+
+      async function finishLogin(config, tokenSet, explicitUserId) {
+        const claims = typeof tokenSet === "object" ? tokenSet : {};
+        const token = typeof tokenSet === "string" ? tokenSet : tokenSet.access_token || tokenSet.id_token || "";
+        const userId = explicitUserId || claims.sub || claims.user_id || claims.email || `cloud_user_${String(token).slice(0, 12)}`;
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+          userId,
+          token,
+          accessToken: typeof tokenSet === "object" ? tokenSet.access_token || "" : token,
+          idToken: typeof tokenSet === "object" ? tokenSet.id_token || "" : "",
+          expiresIn: typeof tokenSet === "object" ? tokenSet.expires_in || 0 : 0,
+          expiresAt: typeof tokenSet === "object" && tokenSet.expires_in
+            ? Date.now() + Number(tokenSet.expires_in) * 1000
+            : 0,
+          loginAt: Date.now()
+        }));
+        sessionStorage.removeItem("identity_oauth_state");
+        sessionStorage.removeItem("identity_oauth_verifier");
+        const next = new URL("agent.html", location.href);
+        if (config.endpoint) next.searchParams.set("endpoint", config.endpoint);
+        if (config.issuer) next.searchParams.set("issuer", config.issuer);
+        if (config.client_id) next.searchParams.set("client_id", config.client_id);
+        if (config.signup_url) next.searchParams.set("signup_url", config.signup_url);
+        next.searchParams.set("user_id", userId);
+        location.replace(next.toString());
+      }
+
+      function readOAuthConfig() {
+        try {
+          const stored = JSON.parse(sessionStorage.getItem("identity_oauth_config") || "{}");
+          return {
+            endpoint: stored.endpoint || params.get("endpoint") || APP_CONFIG.endpoint || "",
+            issuer: stored.issuer || params.get("issuer") || "",
+            client_id: stored.client_id || params.get("client_id") || "",
+            signup_url: stored.signup_url || params.get("signup_url") || "",
+            redirect_uri: stored.redirect_uri || new URL("auth.html", location.href).toString(),
+            token_endpoint: stored.token_endpoint || params.get("token_endpoint") || "",
+            userinfo_endpoint: stored.userinfo_endpoint || params.get("userinfo_endpoint") || ""
+          };
+        } catch (_) {
+          throw new Error("OAuth 配置读取失败，请重新登录。");
+        }
+      }
+
+      async function parseResponse(response) {
+        const text = await response.text();
+        try { return JSON.parse(text); } catch (_) { return { error: text }; }
+      }
+
+      function decodeJwt(token) {
+        if (!token || token.split(".").length < 2) return {};
+        try {
+          const value = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+          return JSON.parse(decodeURIComponent(escape(atob(value))));
+        } catch (_) {
+          return {};
+        }
+      }
+
+      function pickParam(keys) {
+        for (const key of keys) {
+          const value = params.get(key) || hashParams.get(key);
+          if (value) return value;
+        }
+        return "";
+      }
+    </script>
+  </body>
+</html>

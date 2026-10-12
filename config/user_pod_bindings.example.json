@@ -1,0 +1,7 @@
+{
+  "<user_id>": {
+    "product_id": "<your_mua_product_id>",
+    "pod_id": "<your_mua_pod_id>",
+    "status": "active"
+  }
+}

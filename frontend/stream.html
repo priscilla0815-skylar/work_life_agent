@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>云手机</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #090d12;
+        color: #edf2f7;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .app {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #253244;
+        background: #111821;
+      }
+      h1 {
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: 0;
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        border: 1px solid #46c98f;
+        background: #46c98f;
+        color: #06100a;
+        padding: 9px 12px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: transparent;
+        color: #edf2f7;
+        border-color: #3a4a5f;
+      }
+      button:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+      }
+      .status {
+        color: #a8b3c3;
+        font-size: 13px;
+      }
+      .stage-wrap {
+        display: grid;
+        place-items: center;
+        min-height: 0;
+        padding: 12px;
+        overflow: hidden;
+      }
+      #phone-stage {
+        width: min(100%, 480px);
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+        aspect-ratio: 9 / 16;
+        background: #020407;
+        border: 1px solid #253244;
+        overflow: hidden;
+      }
+      #phone-stage > * {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
+      }
+      footer {
+        border-top: 1px solid #253244;
+        background: #111821;
+        padding: 10px 16px;
+      }
+      pre {
+        max-height: 96px;
+        overflow: auto;
+        margin: 0;
+        color: #c9d4e2;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      @media (max-width: 640px) {
+        header { align-items: flex-start; flex-direction: column; }
+        .actions { width: 100%; justify-content: space-between; }
+        .stage-wrap { padding: 8px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div>
+          <h1 id="title">云手机</h1>
+          <div class="status" id="status">准备连接</div>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="backBtn" type="button">返回对话</button>
+          <button class="secondary" id="refreshBtn" type="button">刷新凭证</button>
+          <button id="stopBtn" type="button">停止拉流</button>
+        </div>
+      </header>
+
+      <section class="stage-wrap">
+        <div id="phone-stage"></div>
+      </section>
+
+      <footer>
+        <pre id="debug">等待拉流...</pre>
+      </footer>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="https://unpkg.com/@volcengine/vephone@1.71.1/dist/index.umd.min.js"></script>
+    <script>
+
+      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
+      const params = new URLSearchParams(location.search);
+      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
+      const AUTH_STORAGE_KEY = "work_life_agent_auth";
+      const AUTH = readStoredAuth();
+      const USER_ID = params.get("user_id") || AUTH.userId || "web_user";
+
+      const title = document.getElementById("title");
+      const statusEl = document.getElementById("status");
+      const debug = document.getElementById("debug");
+      const refreshBtn = document.getElementById("refreshBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const stageWrap = document.querySelector(".stage-wrap");
+      const phoneStage = document.getElementById("phone-stage");
+      let sdk = null;
+
+      if ("ResizeObserver" in window) {
+        new ResizeObserver(fitPhoneStage).observe(stageWrap);
+      } else {
+        window.addEventListener("resize", fitPhoneStage);
+      }
+      fitPhoneStage();
+
+      document.getElementById("backBtn").addEventListener("click", () => {
+        const next = new URL("agent.html", location.href);
+        next.searchParams.set("endpoint", ENDPOINT);
+        next.searchParams.set("user_id", USER_ID);
+        if (window.opener && !window.opener.closed) {
+          window.opener.focus();
+          window.close();
+          setTimeout(() => {
+            if (!window.closed) {
+              location.href = next.toString();
+            }
+          }, 100);
+          return;
+        }
+        location.href = next.toString();
+      });
+      refreshBtn.addEventListener("click", startStream);
+      stopBtn.addEventListener("click", () => stopStream());
+
+      startStream();
+
+      async function fetchSession() {
+        const response = await fetch(`${ENDPOINT}/api/stream-session`, {
+          credentials: "include",
+          headers: {
+            "Authorization": `Bearer ${AUTH.accessToken || AUTH.token || ""}`
+          }
+        });
+        const text = await response.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (_) {
+          data = { error: text };
+        }
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            location.replace(new URL("./", location.href).toString());
+            throw new Error("登录已失效，请重新登录");
+          }
+          throw new Error(data.detail || data.error || "failed to create stream session");
+        }
+        return data;
+      }
+
+      async function startStream() {
+        refreshBtn.disabled = true;
+        statusEl.textContent = "获取拉流凭证";
+        try {
+          const session = await fetchSession();
+          await stopStream({ silent: true });
+          fitPhoneStage();
+
+          if (!window.vePhoneSDK) {
+            throw new Error("vePhone Web SDK failed to load");
+          }
+          const binding = session.binding || {};
+          const productId = binding.product_id || session.product_id;
+          const podId = binding.pod_id || session.pod_id;
+          title.textContent = `云手机 ${podId}`;
+
+          statusEl.textContent = "启动拉流";
+          sdk = new window.vePhoneSDK({
+            userId: session.user_id || USER_ID,
+            accountId: session.account_id,
+            domId: "phone-stage",
+            isPC: !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+            isDebug: true
+          });
+          await sdk.start({
+            productId,
+            podId,
+            token: session.token,
+            rotation: "portrait",
+            videoRenderMode: 0,
+            mute: true,
+            audioAutoPlay: true
+          });
+
+          statusEl.textContent = "拉流中";
+          debug.textContent = JSON.stringify({
+            user_id: USER_ID,
+            account_id: session.account_id,
+            product_id: productId,
+            pod_id: podId,
+            expires_at: session.token && session.token.ExpiredTime
+          }, null, 2);
+        } catch (error) {
+          statusEl.textContent = "连接失败";
+          debug.textContent = String(error.message || error);
+        } finally {
+          refreshBtn.disabled = false;
+        }
+      }
+
+      async function stopStream(options = {}) {
+        if (sdk) {
+          try {
+            if (sdk.getConnectionState() === "CONNECTED") {
+              await sdk.stop();
+            }
+            sdk.destroy();
+          } catch (error) {
+            console.warn(error);
+          }
+          sdk = null;
+        }
+        phoneStage.innerHTML = "";
+        if (!options.silent) {
+          statusEl.textContent = "已停止";
+        }
+      }
+
+      function fitPhoneStage() {
+        const style = getComputedStyle(stageWrap);
+        const availableWidth = stageWrap.clientWidth
+          - parseFloat(style.paddingLeft)
+          - parseFloat(style.paddingRight);
+        const availableHeight = stageWrap.clientHeight
+          - parseFloat(style.paddingTop)
+          - parseFloat(style.paddingBottom);
+        if (!availableWidth || !availableHeight) return;
+        const width = Math.floor(Math.min(availableWidth, availableHeight * 9 / 16));
+        phoneStage.style.width = `${width}px`;
+        phoneStage.style.height = `${Math.floor(width * 16 / 9)}px`;
+      }
+
+      function readStoredAuth() {
+        try {
+          return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || "null") || {};
+        } catch (_) {
+          return {};
+        }
+      }
+    </script>
+  </body>
+</html>

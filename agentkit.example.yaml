@@ -1,0 +1,63 @@
+common:
+  agent_name: work_life_agent
+  entry_point: main.py
+  description: Personal work organizer with cloud-phone capabilities.
+  language: Python
+  language_version: "3.12"
+  agent_type: Basic App
+  dependencies_file: requirements.txt
+  runtime_envs:
+    MODEL_AGENT_NAME: ""
+    MODEL_AGENT_PROVIDER: ""
+    MODEL_AGENT_API_BASE: ""
+    MODEL_AGENT_API_KEY: ""
+    VOLCENGINE_ACCESS_KEY: ""
+    VOLCENGINE_SECRET_KEY: ""
+    VOLC_ACCESSKEY: ""
+    VOLC_SECRETKEY: ""
+    MUA_PRODUCT_ID: ""
+    MUA_ACCOUNT_ID: ""
+    # Optional overrides; auto-detected from purchased resources when empty.
+    MUA_CONFIGURATION_CODE: ""
+    MUA_CREATE_DC: ""
+    MUA_DATA_SIZE: 4Gi
+    MUA_STREAM_TOKEN_MODE: legacy_sts
+    MUA_STREAM_TOKEN_TTL_SECONDS: "600"
+    OIDC_USER_POOL_ID: ""
+    OIDC_REGION: cn-beijing
+    OIDC_AUDIENCE: ""
+    CORS_ORIGINS: https://your-frontend.example.com
+  launch_type: cloud
+  cloud_provider: volcengine
+
+launch_types:
+  cloud:
+    region: cn-beijing
+    tos_bucket: agentkit-platform-{{account_id}}
+    tos_prefix: agentkit-builds
+    image_tag: "{{timestamp}}"
+    cr_instance_name: agentkit-platform-{{account_id}}
+    cr_namespace_name: agentkit
+    cr_repo_name: work_life_agent
+    cr_auto_create_instance_type: Micro
+    build_timeout: 3600
+    cp_workspace_name: agentkit-cli-workspace
+    cp_pipeline_name: Auto
+    project_name: default
+    runtime_id: Auto
+    runtime_name: Auto
+    runtime_role_name: Auto
+    runtime_auth_type: custom_jwt
+    runtime_apikey_name: Auto
+    runtime_apikey: Auto
+    runtime_jwt_discovery_url: https://your-identity-issuer.example.com/.well-known/openid-configuration
+    runtime_jwt_allowed_clients:
+      - your-identity-client-id
+    runtime_envs: {}
+    runtime_bindings: {}
+    runtime_network:
+      mode: public
+
+docker_build:
+  base_image:
+  build_script:
