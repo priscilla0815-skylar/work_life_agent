@@ -24,3 +24,4 @@ config/user_pod_bindings.json
 config/mua_run_owners.json
 config/*.lock
 .trae-html-share-packages/
+/todolist/
