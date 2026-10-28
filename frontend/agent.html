@@ -130,12 +130,10 @@
       </form>
     </main>
 
-    <script src="config.js"></script>
     <script>
-      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
       const params = new URLSearchParams(location.search);
       const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
-      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
+      const ENDPOINT = params.get("endpoint") || "http://127.0.0.1:8000";
       const AUTH_STORAGE_KEY = "work_life_agent_auth";
       const authState = resolveAuthState();
       if (!authState || !authState.token) {

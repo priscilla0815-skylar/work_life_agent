@@ -73,31 +73,21 @@
       </section>
     </main>
 
-    <script src="config.js"></script>
     <script>
-      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
       const params = new URLSearchParams(location.search);
-      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
-      const IDENTITY_REGION = params.get("identity_region") || APP_CONFIG.identityRegion || "cn-beijing";
+      const ENDPOINT = params.get("endpoint") || "http://127.0.0.1:8000";
+      const IDENTITY_REGION = params.get("identity_region") || "cn-beijing";
       const IDENTITY_ISSUER = resolveIssuer(
-        params.get("issuer") || params.get("user_pool_id") || APP_CONFIG.userPoolId || "",
+        params.get("issuer") || params.get("user_pool_id") || "",
         IDENTITY_REGION
       );
-      const CLIENT_ID = params.get("client_id") || APP_CONFIG.clientId || "";
-      const SIGNUP_URL = params.get("signup_url") || "";
+      const CLIENT_ID = params.get("client_id") || "";
+      const SIGNUP_URL = params.get("signup_url")
+        || (IDENTITY_ISSUER ? `${IDENTITY_ISSUER}/signup/generic_oauth/callback` : "#");
       const REDIRECT_URI = new URL("auth.html", location.href).toString();
 
-      document.getElementById("loginLink").addEventListener("click", (event) => {
-        startAuthorization(event, false);
-      });
-      document.getElementById("signupLink").addEventListener("click", (event) => {
-        if (SIGNUP_URL) {
-          event.preventDefault();
-          location.href = SIGNUP_URL;
-          return;
-        }
-        startAuthorization(event, true);
-      });
+      document.getElementById("loginLink").addEventListener("click", startLogin);
+      document.getElementById("signupLink").href = SIGNUP_URL;
       document.getElementById("agentLink").href = agentUrl();
 
       function resolveIssuer(value, region) {
@@ -109,7 +99,7 @@
         return `https://${userPoolId}.userpool.auth.id.${region}.volces.com`;
       }
 
-      async function startAuthorization(event, signup) {
+      async function startLogin(event) {
         event.preventDefault();
         if (!IDENTITY_ISSUER || !CLIENT_ID) {
           throw new Error("URL must include user_pool_id and client_id");
@@ -141,13 +131,7 @@
           code_challenge: await sha256Base64Url(verifier),
           code_challenge_method: "S256"
         }).toString();
-        if (signup) {
-          const bridge = new URL("oauth/signup", location.href);
-          bridge.searchParams.set("authorization_url", url.toString());
-          location.href = bridge.toString();
-        } else {
-          location.href = url.toString();
-        }
+        location.href = url.toString();
       }
 
       function agentUrl() {
@@ -156,7 +140,7 @@
         if (IDENTITY_ISSUER) next.searchParams.set("issuer", IDENTITY_ISSUER);
         next.searchParams.set("identity_region", IDENTITY_REGION);
         if (CLIENT_ID) next.searchParams.set("client_id", CLIENT_ID);
-        if (SIGNUP_URL) next.searchParams.set("signup_url", SIGNUP_URL);
+        if (SIGNUP_URL !== "#") next.searchParams.set("signup_url", SIGNUP_URL);
         next.hash = "";
         return next.toString();
       }

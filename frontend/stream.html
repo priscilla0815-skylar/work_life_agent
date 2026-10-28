@@ -17,8 +17,6 @@
         display: grid;
         grid-template-rows: auto 1fr auto;
         height: 100vh;
-        height: 100dvh;
-        overflow: hidden;
       }
       header {
         display: flex;
@@ -62,27 +60,16 @@
         font-size: 13px;
       }
       .stage-wrap {
-        display: grid;
-        place-items: center;
         min-height: 0;
         padding: 12px;
-        overflow: hidden;
       }
       #phone-stage {
-        width: min(100%, 480px);
-        height: auto;
-        max-width: 100%;
-        max-height: 100%;
-        aspect-ratio: 9 / 16;
+        width: 100%;
+        height: 100%;
+        min-height: 420px;
         background: #020407;
         border: 1px solid #253244;
         overflow: hidden;
-      }
-      #phone-stage > * {
-        width: 100% !important;
-        height: 100% !important;
-        max-width: 100%;
-        max-height: 100%;
       }
       footer {
         border-top: 1px solid #253244;
@@ -129,13 +116,11 @@
       </footer>
     </main>
 
-    <script src="config.js"></script>
-    <script src="https://unpkg.com/@volcengine/vephone@1.71.1/dist/index.umd.min.js"></script>
+    <script src="https://unpkg.com/@volcengine/vephone@1.69.0/dist/index.umd.min.js"></script>
     <script>
 
-      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
       const params = new URLSearchParams(location.search);
-      const ENDPOINT = params.get("endpoint") || APP_CONFIG.endpoint || "http://127.0.0.1:8000";
+      const ENDPOINT = params.get("endpoint") || "http://127.0.0.1:8000";
       const AUTH_STORAGE_KEY = "work_life_agent_auth";
       const AUTH = readStoredAuth();
       const USER_ID = params.get("user_id") || AUTH.userId || "web_user";
@@ -145,16 +130,7 @@
       const debug = document.getElementById("debug");
       const refreshBtn = document.getElementById("refreshBtn");
       const stopBtn = document.getElementById("stopBtn");
-      const stageWrap = document.querySelector(".stage-wrap");
-      const phoneStage = document.getElementById("phone-stage");
       let sdk = null;
-
-      if ("ResizeObserver" in window) {
-        new ResizeObserver(fitPhoneStage).observe(stageWrap);
-      } else {
-        window.addEventListener("resize", fitPhoneStage);
-      }
-      fitPhoneStage();
 
       document.getElementById("backBtn").addEventListener("click", () => {
         const next = new URL("agent.html", location.href);
@@ -184,19 +160,8 @@
             "Authorization": `Bearer ${AUTH.accessToken || AUTH.token || ""}`
           }
         });
-        const text = await response.text();
-        let data = {};
-        try {
-          data = text ? JSON.parse(text) : {};
-        } catch (_) {
-          data = { error: text };
-        }
+        const data = await response.json();
         if (!response.ok) {
-          if (response.status === 401) {
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            location.replace(new URL("./", location.href).toString());
-            throw new Error("登录已失效，请重新登录");
-          }
           throw new Error(data.detail || data.error || "failed to create stream session");
         }
         return data;
@@ -208,7 +173,6 @@
         try {
           const session = await fetchSession();
           await stopStream({ silent: true });
-          fitPhoneStage();
 
           if (!window.vePhoneSDK) {
             throw new Error("vePhone Web SDK failed to load");
@@ -231,7 +195,6 @@
             podId,
             token: session.token,
             rotation: "portrait",
-            videoRenderMode: 0,
             mute: true,
             audioAutoPlay: true
           });
@@ -264,24 +227,10 @@
           }
           sdk = null;
         }
-        phoneStage.innerHTML = "";
+        document.getElementById("phone-stage").innerHTML = "";
         if (!options.silent) {
           statusEl.textContent = "已停止";
         }
-      }
-
-      function fitPhoneStage() {
-        const style = getComputedStyle(stageWrap);
-        const availableWidth = stageWrap.clientWidth
-          - parseFloat(style.paddingLeft)
-          - parseFloat(style.paddingRight);
-        const availableHeight = stageWrap.clientHeight
-          - parseFloat(style.paddingTop)
-          - parseFloat(style.paddingBottom);
-        if (!availableWidth || !availableHeight) return;
-        const width = Math.floor(Math.min(availableWidth, availableHeight * 9 / 16));
-        phoneStage.style.width = `${width}px`;
-        phoneStage.style.height = `${Math.floor(width * 16 / 9)}px`;
       }
 
       function readStoredAuth() {

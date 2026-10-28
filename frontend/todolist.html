@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3ef">
+  <title>今日清单</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f4f3ef;
+      --surface: #ffffff;
+      --surface-soft: #f8f8f5;
+      --ink: #20231f;
+      --muted: #72766f;
+      --line: #dedfd9;
+      --line-strong: #c8cac2;
+      --accent: #167d64;
+      --accent-dark: #0e624e;
+      --accent-soft: #e4f1ec;
+      --amber: #a66515;
+      --amber-soft: #fff0d8;
+      --red: #b8473b;
+      --red-soft: #fce9e6;
+      --blue: #35669a;
+      --blue-soft: #e9f1f8;
+      --shadow: 0 18px 50px rgba(31, 35, 30, 0.09);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--canvas);
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px),
+        var(--canvas);
+      background-size: 32px 32px;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app-shell {
+      width: min(1080px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 56px 0 64px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.12;
+      font-weight: 760;
+    }
+
+    .date-line {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .progress-block {
+      width: min(330px, 42vw);
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #dfe1db;
+    }
+
+    .progress-fill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 240ms ease;
+    }
+
+    .workspace {
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 154px 140px auto;
+      gap: 10px;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+
+    .field {
+      position: relative;
+      min-width: 0;
+    }
+
+    .field-label {
+      position: absolute;
+      z-index: 1;
+      top: -7px;
+      left: 10px;
+      padding: 0 4px;
+      color: var(--muted);
+      background: var(--surface-soft);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    .control {
+      width: 100%;
+      height: 44px;
+      min-width: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      outline: none;
+      color: var(--ink);
+      background: var(--surface);
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    input.control {
+      padding: 0 13px;
+    }
+
+    select.control {
+      padding: 0 34px 0 12px;
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position:
+        calc(100% - 16px) 19px,
+        calc(100% - 11px) 19px;
+      background-repeat: no-repeat;
+      background-size: 5px 5px;
+    }
+
+    .control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .add-button {
+      height: 44px;
+      padding: 0 17px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      color: #fff;
+      background: var(--accent);
+      font-weight: 750;
+      cursor: pointer;
+      transition: background 160ms ease, transform 160ms ease;
+    }
+
+    .add-button:hover {
+      background: var(--accent-dark);
+    }
+
+    .add-button:active {
+      transform: translateY(1px);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .filters::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-button {
+      height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 5px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .filter-button:hover {
+      color: var(--ink);
+      background: var(--surface-soft);
+    }
+
+    .filter-button.is-active {
+      color: var(--accent-dark);
+      background: var(--accent-soft);
+    }
+
+    .search-wrap {
+      position: relative;
+      width: 230px;
+      flex: 0 0 auto;
+    }
+
+    .search-wrap::before {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      color: var(--muted);
+      content: "⌕";
+      font-size: 19px;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      height: 34px;
+      padding: 0 30px 0 34px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      outline: none;
+      color: var(--ink);
+      background: var(--surface-soft);
+      font-size: 13px;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+      background: var(--surface);
+    }
+
+    .clear-search {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 24px;
+      height: 24px;
+      display: none;
+      place-items: center;
+      border: 0;
+      border-radius: 4px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .clear-search:hover {
+      color: var(--ink);
+      background: var(--line);
+    }
+
+    .clear-search.is-visible {
+      display: grid;
+    }
+
+    .task-list {
+      min-height: 280px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .task {
+      position: relative;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 13px;
+      min-height: 76px;
+      padding: 13px 14px 13px 18px;
+      border-bottom: 1px solid var(--line);
+      animation: task-in 220ms ease both;
+    }
+
+    .task:last-child {
+      border-bottom: 0;
+    }
+
+    .task:hover {
+      background: #fbfbf8;
+    }
+
+    .task::before {
+      position: absolute;
+      top: 14px;
+      bottom: 14px;
+      left: 0;
+      width: 3px;
+      border-radius: 0 2px 2px 0;
+      background: var(--blue);
+      content: "";
+    }
+
+    .task[data-priority="high"]::before {
+      background: var(--red);
+    }
+
+    .task[data-priority="low"]::before {
+      background: var(--accent);
+    }
+
+    .check {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 50%;
+      color: transparent;
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease;
+    }
+
+    .check:hover {
+      border-color: var(--accent);
+    }
+
+    .check::after {
+      width: 8px;
+      height: 4px;
+      margin-top: -2px;
+      border-bottom: 2px solid currentColor;
+      border-left: 2px solid currentColor;
+      content: "";
+      transform: rotate(-45deg);
+    }
+
+    .task.is-complete .check {
+      border-color: var(--accent);
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .task-copy {
+      min-width: 0;
+    }
+
+    .task-title {
+      overflow: hidden;
+      margin: 0;
+      font-size: 15px;
+      font-weight: 680;
+      line-height: 1.45;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 7px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 21px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--surface-soft);
+      font-weight: 700;
+    }
+
+    .priority-high {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .priority-medium {
+      color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .priority-low {
+      color: var(--accent-dark);
+      background: var(--accent-soft);
+    }
+
+    .due-overdue {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .due-today {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 150ms ease;
+    }
+
+    .task:hover .task-actions,
+    .task-actions:focus-within {
+      opacity: 1;
+    }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 5px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      color: var(--ink);
+      background: var(--surface-soft);
+    }
+
+    .icon-button.delete:hover {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .task.is-complete .task-title {
+      color: var(--muted);
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+    }
+
+    .task.is-complete .task-meta {
+      opacity: 0.7;
+    }
+
+    .empty-state {
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+      padding: 50px 20px;
+      text-align: center;
+    }
+
+    .empty-mark {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-size: 23px;
+      font-weight: 800;
+    }
+
+    .empty-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    .empty-copy {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .footer {
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      background: var(--surface-soft);
+      font-size: 12px;
+    }
+
+    .clear-completed {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .clear-completed:hover {
+      color: var(--red);
+    }
+
+    .clear-completed:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .edit-form {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) 130px 130px auto;
+      gap: 8px;
+      align-items: center;
+      grid-column: 2 / -1;
+      width: 100%;
+    }
+
+    .edit-form .control {
+      height: 38px;
+      font-size: 13px;
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 20;
+      right: 22px;
+      bottom: 22px;
+      max-width: calc(100vw - 44px);
+      padding: 11px 14px;
+      border: 1px solid #2f3833;
+      border-radius: 6px;
+      color: #fff;
+      background: #252a27;
+      box-shadow: 0 12px 30px rgba(20, 24, 21, 0.2);
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes task-in {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app-shell {
+        width: min(100% - 24px, 620px);
+        padding: 28px 0 40px;
+      }
+
+      .topbar {
+        display: block;
+      }
+
+      h1 {
+        font-size: 29px;
+      }
+
+      .progress-block {
+        width: 100%;
+        margin-top: 22px;
+      }
+
+      .composer {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .composer .title-field {
+        grid-column: 1 / -1;
+      }
+
+      .add-button {
+        grid-column: 1 / -1;
+      }
+
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .search-wrap {
+        width: 100%;
+      }
+
+      .task-actions {
+        opacity: 1;
+      }
+
+      .edit-form {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .edit-form .edit-title {
+        grid-column: 1 / -1;
+      }
+
+      .edit-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-shell {
+        width: 100%;
+        padding: 0;
+      }
+
+      .topbar {
+        padding: 25px 18px 20px;
+      }
+
+      .workspace {
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .composer {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+
+      .composer .title-field,
+      .add-button {
+        grid-column: auto;
+      }
+
+      .toolbar {
+        padding: 12px 16px;
+      }
+
+      .task {
+        grid-template-columns: 26px minmax(0, 1fr) auto;
+        gap: 10px;
+        padding-right: 8px;
+        padding-left: 15px;
+      }
+
+      .task-title {
+        white-space: normal;
+      }
+
+      .task-actions {
+        flex-direction: column;
+      }
+
+      .edit-form {
+        grid-column: 2 / -1;
+        grid-template-columns: 1fr;
+      }
+
+      .edit-form .edit-title,
+      .edit-actions {
+        grid-column: auto;
+      }
+
+      .footer {
+        padding-right: 16px;
+        padding-left: 16px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <p class="eyebrow">Daily Focus</p>
+        <h1>今日清单</h1>
+        <p class="date-line" id="dateLine"></p>
+      </div>
+      <section class="progress-block" aria-label="完成进度">
+        <div class="progress-meta">
+          <span id="progressText">0 / 0 已完成</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </section>
+    </header>
+
+    <section class="workspace" aria-label="任务清单">
+      <form class="composer" id="taskForm">
+        <label class="field title-field">
+          <span class="field-label">任务</span>
+          <input class="control" id="taskTitle" name="title" type="text"
+            placeholder="写下下一件要完成的事" maxlength="80" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span class="field-label">优先级</span>
+          <select class="control" id="taskPriority" name="priority">
+            <option value="medium">普通</option>
+            <option value="high">重要</option>
+            <option value="low">低优先级</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">截止日期</span>
+          <input class="control" id="taskDue" name="due" type="date">
+        </label>
+        <button class="add-button" type="submit">添加任务</button>
+      </form>
+
+      <div class="toolbar">
+        <nav class="filters" aria-label="任务筛选">
+          <button class="filter-button is-active" type="button" data-filter="all">全部</button>
+          <button class="filter-button" type="button" data-filter="active">待完成</button>
+          <button class="filter-button" type="button" data-filter="today">今天</button>
+          <button class="filter-button" type="button" data-filter="completed">已完成</button>
+        </nav>
+        <label class="search-wrap">
+          <span hidden>搜索任务</span>
+          <input class="search-input" id="searchInput" type="search" placeholder="搜索任务"
+            autocomplete="off">
+          <button class="clear-search" id="clearSearch" type="button"
+            aria-label="清除搜索" title="清除搜索">×</button>
+        </label>
+      </div>
+
+      <ul class="task-list" id="taskList" aria-live="polite"></ul>
+      <div class="footer">
+        <span id="remainingText">0 项待完成</span>
+        <button class="clear-completed" id="clearCompleted" type="button">清除已完成</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "daily-focus-tasks-v1";
+      const priorityLabels = {
+        high: "重要",
+        medium: "普通",
+        low: "低优先级"
+      };
+
+      const elements = {
+        form: document.querySelector("#taskForm"),
+        title: document.querySelector("#taskTitle"),
+        priority: document.querySelector("#taskPriority"),
+        due: document.querySelector("#taskDue"),
+        list: document.querySelector("#taskList"),
+        filters: document.querySelector(".filters"),
+        search: document.querySelector("#searchInput"),
+        clearSearch: document.querySelector("#clearSearch"),
+        remaining: document.querySelector("#remainingText"),
+        clearCompleted: document.querySelector("#clearCompleted"),
+        progressText: document.querySelector("#progressText"),
+        progressPercent: document.querySelector("#progressPercent"),
+        progressFill: document.querySelector("#progressFill"),
+        dateLine: document.querySelector("#dateLine"),
+        toast: document.querySelector("#toast")
+      };
+
+      const today = toDateKey(new Date());
+      let tasks = loadTasks();
+      let activeFilter = "all";
+      let editingId = null;
+      let toastTimer = null;
+
+      elements.dateLine.textContent = new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "long"
+      }).format(new Date());
+
+      elements.form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const title = elements.title.value.trim();
+        if (!title) {
+          elements.title.focus();
+          return;
+        }
+
+        tasks.unshift({
+          id: createId(),
+          title,
+          priority: elements.priority.value,
+          due: elements.due.value,
+          completed: false,
+          createdAt: Date.now()
+        });
+        saveTasks();
+        elements.form.reset();
+        elements.title.focus();
+        activeFilter = "all";
+        setActiveFilter();
+        render();
+        showToast("任务已添加");
+      });
+
+      elements.filters.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-filter]");
+        if (!button) return;
+        activeFilter = button.dataset.filter;
+        editingId = null;
+        setActiveFilter();
+        render();
+      });
+
+      elements.search.addEventListener("input", () => {
+        elements.clearSearch.classList.toggle("is-visible", Boolean(elements.search.value));
+        render();
+      });
+
+      elements.clearSearch.addEventListener("click", () => {
+        elements.search.value = "";
+        elements.clearSearch.classList.remove("is-visible");
+        elements.search.focus();
+        render();
+      });
+
+      elements.clearCompleted.addEventListener("click", () => {
+        const completedCount = tasks.filter((task) => task.completed).length;
+        if (!completedCount) return;
+        tasks = tasks.filter((task) => !task.completed);
+        saveTasks();
+        render();
+        showToast(`已清除 ${completedCount} 项任务`);
+      });
+
+      elements.list.addEventListener("click", (event) => {
+        const taskElement = event.target.closest(".task");
+        if (!taskElement) return;
+        const id = taskElement.dataset.id;
+        const action = event.target.closest("[data-action]")?.dataset.action;
+        if (!action) return;
+
+        if (action === "toggle") {
+          updateTask(id, { completed: !getTask(id).completed });
+          showToast(getTask(id).completed ? "任务已完成" : "任务已恢复");
+        }
+
+        if (action === "edit") {
+          editingId = id;
+          render();
+          elements.list.querySelector(".edit-title")?.focus();
+        }
+
+        if (action === "cancel") {
+          editingId = null;
+          render();
+        }
+
+        if (action === "save") {
+          saveEdit(taskElement);
+        }
+
+        if (action === "delete") {
+          const task = getTask(id);
+          tasks = tasks.filter((item) => item.id !== id);
+          saveTasks();
+          render();
+          showToast(`已删除“${task.title}”`);
+        }
+      });
+
+      elements.list.addEventListener("keydown", (event) => {
+        if (!event.target.closest(".edit-form")) return;
+        const taskElement = event.target.closest(".task");
+        if (event.key === "Escape") {
+          editingId = null;
+          render();
+        }
+        if (event.key === "Enter" && event.target.tagName !== "SELECT") {
+          event.preventDefault();
+          saveEdit(taskElement);
+        }
+      });
+
+      function loadTasks() {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) return JSON.parse(stored);
+        } catch (error) {
+          console.warn("Unable to read saved tasks.", error);
+        }
+
+        return [
+          {
+            id: createId(),
+            title: "整理本周最重要的三件事",
+            priority: "high",
+            due: today,
+            completed: false,
+            createdAt: Date.now() - 3000
+          },
+          {
+            id: createId(),
+            title: "回复项目协作消息",
+            priority: "medium",
+            due: today,
+            completed: true,
+            createdAt: Date.now() - 2000
+          },
+          {
+            id: createId(),
+            title: "预留 30 分钟阅读时间",
+            priority: "low",
+            due: "",
+            completed: false,
+            createdAt: Date.now() - 1000
+          }
+        ];
+      }
+
+      function saveTasks() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      }
+
+      function createId() {
+        if (window.crypto?.randomUUID) return crypto.randomUUID();
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+
+      function getTask(id) {
+        return tasks.find((task) => task.id === id);
+      }
+
+      function updateTask(id, patch) {
+        tasks = tasks.map((task) => task.id === id ? { ...task, ...patch } : task);
+        saveTasks();
+        render();
+      }
+
+      function saveEdit(taskElement) {
+        const id = taskElement.dataset.id;
+        const title = taskElement.querySelector(".edit-title").value.trim();
+        if (!title) {
+          taskElement.querySelector(".edit-title").focus();
+          return;
+        }
+        updateTask(id, {
+          title,
+          priority: taskElement.querySelector(".edit-priority").value,
+          due: taskElement.querySelector(".edit-due").value
+        });
+        editingId = null;
+        render();
+        showToast("修改已保存");
+      }
+
+      function setActiveFilter() {
+        document.querySelectorAll("[data-filter]").forEach((button) => {
+          const active = button.dataset.filter === activeFilter;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-current", active ? "true" : "false");
+        });
+      }
+
+      function getVisibleTasks() {
+        const query = elements.search.value.trim().toLocaleLowerCase("zh-CN");
+        return tasks
+          .filter((task) => {
+            if (activeFilter === "active") return !task.completed;
+            if (activeFilter === "completed") return task.completed;
+            if (activeFilter === "today") return task.due === today;
+            return true;
+          })
+          .filter((task) => !query || task.title.toLocaleLowerCase("zh-CN").includes(query))
+          .sort((a, b) => {
+            if (a.completed !== b.completed) return Number(a.completed) - Number(b.completed);
+            const rank = { high: 0, medium: 1, low: 2 };
+            if (rank[a.priority] !== rank[b.priority]) return rank[a.priority] - rank[b.priority];
+            return b.createdAt - a.createdAt;
+          });
+      }
+
+      function render() {
+        const visibleTasks = getVisibleTasks();
+        elements.list.innerHTML = "";
+
+        if (!visibleTasks.length) {
+          const searching = Boolean(elements.search.value.trim());
+          elements.list.innerHTML = `
+            <li class="empty-state">
+              <div>
+                <div class="empty-mark">${searching ? "⌕" : "✓"}</div>
+                <p class="empty-title">${searching ? "没有匹配的任务" : "这里已经清空了"}</p>
+                <p class="empty-copy">${searching ? "换个关键词再试试" : "添加一项任务，开始今天的节奏"}</p>
+              </div>
+            </li>
+          `;
+        } else {
+          visibleTasks.forEach((task) => {
+            elements.list.insertAdjacentHTML("beforeend", taskTemplate(task));
+          });
+        }
+
+        const completed = tasks.filter((task) => task.completed).length;
+        const remaining = tasks.length - completed;
+        const percent = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+        elements.remaining.textContent = `${remaining} 项待完成`;
+        elements.progressText.textContent = `${completed} / ${tasks.length} 已完成`;
+        elements.progressPercent.textContent = `${percent}%`;
+        elements.progressFill.style.width = `${percent}%`;
+        elements.clearCompleted.disabled = completed === 0;
+      }
+
+      function taskTemplate(task) {
+        const completedClass = task.completed ? " is-complete" : "";
+        if (editingId === task.id) {
+          return `
+            <li class="task${completedClass}" data-id="${escapeHtml(task.id)}"
+              data-priority="${escapeHtml(task.priority)}">
+              <button class="check" type="button" data-action="toggle"
+                aria-label="${task.completed ? "恢复任务" : "完成任务"}"></button>
+              <div class="edit-form">
+                <input class="control edit-title" type="text" maxlength="80"
+                  value="${escapeHtml(task.title)}" aria-label="任务名称">
+                <select class="control edit-priority" aria-label="优先级">
+                  ${priorityOptions(task.priority)}
+                </select>
+                <input class="control edit-due" type="date" value="${escapeHtml(task.due)}"
+                  aria-label="截止日期">
+                <div class="edit-actions">
+                  <button class="icon-button" type="button" data-action="save"
+                    aria-label="保存修改" title="保存修改">✓</button>
+                  <button class="icon-button" type="button" data-action="cancel"
+                    aria-label="取消修改" title="取消修改">×</button>
+                </div>
+              </div>
+            </li>
+          `;
+        }
+
+        return `
+          <li class="task${completedClass}" data-id="${escapeHtml(task.id)}"
+            data-priority="${escapeHtml(task.priority)}">
+            <button class="check" type="button" data-action="toggle"
+              aria-label="${task.completed ? "恢复任务" : "完成任务"}"
+              title="${task.completed ? "恢复任务" : "完成任务"}"></button>
+            <div class="task-copy">
+              <p class="task-title">${escapeHtml(task.title)}</p>
+              <div class="task-meta">
+                <span class="meta-chip priority-${escapeHtml(task.priority)}">
+                  ${priorityLabels[task.priority]}
+                </span>
+                ${dueTemplate(task.due)}
+              </div>
+            </div>
+            <div class="task-actions">
+              <button class="icon-button" type="button" data-action="edit"
+                aria-label="编辑任务" title="编辑任务">✎</button>
+              <button class="icon-button delete" type="button" data-action="delete"
+                aria-label="删除任务" title="删除任务">×</button>
+            </div>
+          </li>
+        `;
+      }
+
+      function priorityOptions(selected) {
+        return Object.entries(priorityLabels)
+          .map(([value, label]) => `
+            <option value="${value}"${value === selected ? " selected" : ""}>${label}</option>
+          `)
+          .join("");
+      }
+
+      function dueTemplate(due) {
+        if (!due) return '<span>无截止日期</span>';
+        let className = "";
+        let label = formatDate(due);
+        if (due < today) {
+          className = " due-overdue";
+          label = `已逾期 · ${label}`;
+        } else if (due === today) {
+          className = " due-today";
+          label = "今天截止";
+        }
+        return `<span class="meta-chip${className}">${label}</span>`;
+      }
+
+      function formatDate(value) {
+        const date = new Date(`${value}T00:00:00`);
+        return new Intl.DateTimeFormat("zh-CN", {
+          month: "short",
+          day: "numeric"
+        }).format(date);
+      }
+
+      function toDateKey(date) {
+        const offset = date.getTimezoneOffset();
+        return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function showToast(message) {
+        window.clearTimeout(toastTimer);
+        elements.toast.textContent = message;
+        elements.toast.classList.add("is-visible");
+        toastTimer = window.setTimeout(() => {
+          elements.toast.classList.remove("is-visible");
+        }, 1800);
+      }
+
+      setActiveFilter();
+      render();
+    })();
+  </script>
+</body>
+</html>

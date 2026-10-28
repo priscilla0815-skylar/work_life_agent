@@ -39,9 +39,7 @@
       <p>登录状态已返回，正在跳转到主页面。</p>
     </div>
 
-    <script src="config.js"></script>
     <script>
-      const APP_CONFIG = window.WORK_LIFE_CONFIG || {};
       const params = new URLSearchParams(location.search);
       const hashParams = new URLSearchParams(location.hash.replace(/^#/, ""));
       const AUTH_STORAGE_KEY = "work_life_agent_auth";
@@ -128,7 +126,7 @@
         try {
           const stored = JSON.parse(sessionStorage.getItem("identity_oauth_config") || "{}");
           return {
-            endpoint: stored.endpoint || params.get("endpoint") || APP_CONFIG.endpoint || "",
+            endpoint: stored.endpoint || params.get("endpoint") || "",
             issuer: stored.issuer || params.get("issuer") || "",
             client_id: stored.client_id || params.get("client_id") || "",
             signup_url: stored.signup_url || params.get("signup_url") || "",
